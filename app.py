@@ -100,14 +100,14 @@ def run_training_pipeline():
 # ────────────────────── data check ───────────────────────────────────
 
 DATA_PATH = os.path.join("data", "fraud_data.csv")
-if not os.path.exists(DATA_PATH):
-    st.error(
-        "⚠️ Data file not found. Please run `python run_pipeline.py` first "
-        "to generate the dataset and train models."
-    )
-    st.stop()
 
-df = load_data()
+if not os.path.exists(DATA_PATH):
+    st.warning("Dataset not found. Generating dataset and training model...")
+    
+    import subprocess
+    subprocess.run(["python", "run_pipeline.py"])
+    
+    st.success("Dataset and model generated successfully!")
 
 # ────────────────────── main tabs ────────────────────────────────────
 
