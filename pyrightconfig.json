@@ -1,0 +1,6 @@
+{
+  "include": ["src", "*.py"],
+  "extraPaths": ["."],
+  "pythonVersion": "3.12",
+  "reportMissingImports": "warning"
+}
