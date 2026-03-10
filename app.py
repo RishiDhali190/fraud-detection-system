@@ -121,7 +121,7 @@ with tab1:
     st.header("📊 Dataset Overview")
 
     col1, col2, col3, col4 = st.columns(4)
-    n_fraud = int(df["Class"].sum())
+    n_fraud = int(df["is_fraud"].sum())
     n_legit = len(df) - n_fraud
     col1.metric("Total Transactions", f"{len(df):,}")
     col2.metric("Legitimate", f"{n_legit:,}")
