@@ -1,315 +1,202 @@
 """
-app.py — Streamlit Demo for Fraud Detection System
-
-Provides an interactive dashboard with three tabs:
-  1. 📊 Data Explorer   — dataset overview, class distribution, feature stats
-  2. 🏆 Model Results   — comparison table, ROC & PR curves, confusion matrices
-  3. 🔮 Live Prediction — enter transaction features and get a fraud probability
-
-Launch
-------
-    streamlit run app.py
+Streamlit Demo — Fraud Detection System
 """
 
 import os
 import sys
-import numpy as np
+import subprocess
 import pandas as pd
+import numpy as np
 import streamlit as st
-import joblib
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Ensure project imports work
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.data_pipeline import load_raw_data, clean_data
-from src.evaluation import (
-    plot_confusion_matrix,
-    plot_roc_curves,
-    plot_pr_curves,
-    compare_models,
-)
-from src.modeling import train_all_models, get_models
-from src.data_pipeline import load_and_prepare_data
+from src.data_pipeline import load_raw_data, clean_data, load_and_prepare_data
+from src.modeling import train_all_models
+from src.evaluation import plot_confusion_matrix, plot_roc_curves, plot_pr_curves, compare_models
 
-# ────────────────────── page config ──────────────────────────────────
+
+# -------------------------------------------------------
+# PAGE CONFIG
+# -------------------------------------------------------
 
 st.set_page_config(
     page_title="Fraud Detection System",
     page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    layout="wide"
 )
 
-# ────────────────────── custom CSS ───────────────────────────────────
-
-st.markdown("""
-<style>
-    .stMetric {border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px;}
-    .block-container {padding-top: 2rem;}
-    h1 {color: #1a1a2e;}
-</style>
-""", unsafe_allow_html=True)
-
-# ────────────────────── sidebar ──────────────────────────────────────
-
-st.sidebar.title("🛡️ Fraud Detection")
-st.sidebar.markdown("---")
-st.sidebar.markdown(
-    "**End-to-End ML System**\n\n"
-    "A production-style fraud detection pipeline demonstrating:\n"
-    "- Data cleaning\n"
-    "- Imbalanced-data handling (SMOTE)\n"
-    "- Model comparison\n"
-    "- Evaluation beyond accuracy\n"
-)
-
-# ────────────────────── cached loaders ───────────────────────────────
+st.title("🛡️ Fraud Detection System")
 
 
-@st.cache_data
-def load_data():
-    """Load and return raw & cleaned DataFrames."""
-    df_raw = load_raw_data()
-    df = clean_data(df_raw)
-    return df
-
-
-@st.cache_resource
-def run_training_pipeline():
-    """Run the ML pipeline and cache results."""
-    X_train, X_test, y_train, y_test, preprocessor, feature_names = (
-        load_and_prepare_data()
-    )
-    trained_models, training_times = train_all_models(X_train, y_train)
-    comparison_df, all_metrics = compare_models(trained_models, X_test, y_test)
-    return {
-        "X_test": X_test,
-        "y_test": y_test,
-        "trained_models": trained_models,
-        "training_times": training_times,
-        "comparison_df": comparison_df,
-        "all_metrics": all_metrics,
-        "preprocessor": preprocessor,
-        "feature_names": feature_names,
-    }
-
-
-# ────────────────────── data check ───────────────────────────────────
+# -------------------------------------------------------
+# DATA CHECK
+# -------------------------------------------------------
 
 DATA_PATH = os.path.join("data", "fraud_data.csv")
 
 if not os.path.exists(DATA_PATH):
     st.warning("Dataset not found. Generating dataset and training model...")
-    
-    import subprocess
     subprocess.run(["python", "run_pipeline.py"])
-    
-    st.success("Dataset and model generated successfully!")
+    st.success("Dataset generated successfully.")
 
-# ────────────────────── main tabs ────────────────────────────────────
 
-tab1, tab2, tab3 = st.tabs(["📊 Data Explorer", "🏆 Model Results", "🔮 Live Prediction"])
+# -------------------------------------------------------
+# DATA LOADER
+# -------------------------------------------------------
 
-# ═══════════════════════════════════════════════════════════════════════
-#  TAB 1 — DATA EXPLORER
-# ═══════════════════════════════════════════════════════════════════════
+@st.cache_data
+def load_data():
+    df_raw = load_raw_data()
+    df = clean_data(df_raw)
+    return df
+
+
+df = load_data()
+
+
+# -------------------------------------------------------
+# TRAINING PIPELINE
+# -------------------------------------------------------
+
+@st.cache_resource
+def run_training_pipeline():
+
+    X_train, X_test, y_train, y_test, preprocessor, feature_names = load_and_prepare_data()
+
+    trained_models, training_times = train_all_models(X_train, y_train)
+
+    comparison_df, all_metrics = compare_models(trained_models, X_test, y_test)
+
+    return {
+        "trained_models": trained_models,
+        "comparison_df": comparison_df,
+        "all_metrics": all_metrics,
+        "training_times": training_times,
+        "X_test": X_test,
+        "y_test": y_test,
+        "preprocessor": preprocessor,
+        "feature_names": feature_names
+    }
+
+
+# -------------------------------------------------------
+# TABS
+# -------------------------------------------------------
+
+tab1, tab2, tab3 = st.tabs(
+    ["📊 Data Explorer", "🏆 Model Results", "🔮 Live Prediction"]
+)
+
+# =======================================================
+# TAB 1 — DATA EXPLORER
+# =======================================================
 
 with tab1:
-    st.header("📊 Dataset Overview")
 
-    col1, col2, col3, col4 = st.columns(4)
+    st.header("Dataset Overview")
+
     n_fraud = int(df["is_fraud"].sum())
     n_legit = len(df) - n_fraud
-    col1.metric("Total Transactions", f"{len(df):,}")
-    col2.metric("Legitimate", f"{n_legit:,}")
-    col3.metric("Fraudulent", f"{n_fraud:,}")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Total Transactions", len(df))
+    col2.metric("Legitimate", n_legit)
+    col3.metric("Fraud", n_fraud)
     col4.metric("Fraud Rate", f"{n_fraud/len(df):.2%}")
 
-    st.markdown("---")
+    st.divider()
 
-    # Class distribution
-    left, right = st.columns(2)
-    with left:
-        st.subheader("Class Distribution")
-        fig_dist, ax_dist = plt.subplots(figsize=(5, 3.5))
-        colors = ["#2ecc71", "#e74c3c"]
-        bars = ax_dist.bar(["Legitimate", "Fraud"], [n_legit, n_fraud], color=colors)
-        for bar, val in zip(bars, [n_legit, n_fraud]):
-            ax_dist.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 50,
-                         f"{val:,}", ha="center", fontsize=11, fontweight="bold")
-        ax_dist.set_ylabel("Count")
-        ax_dist.set_title("Transactions by Class")
-        fig_dist.tight_layout()
-        st.pyplot(fig_dist)
+    st.subheader("Class Distribution")
 
-    with right:
-        st.subheader("Transaction Amount Distribution")
-        fig_amt, ax_amt = plt.subplots(figsize=(5, 3.5))
-        df[df["Class"] == 0]["Amount"].hist(
-            bins=50, ax=ax_amt, alpha=0.7, label="Legit", color="#2ecc71"
-        )
-        df[df["Class"] == 1]["Amount"].hist(
-            bins=50, ax=ax_amt, alpha=0.7, label="Fraud", color="#e74c3c"
-        )
-        ax_amt.set_xlabel("Amount ($)")
-        ax_amt.set_ylabel("Frequency")
-        ax_amt.set_title("Amount Distribution by Class")
-        ax_amt.legend()
-        fig_amt.tight_layout()
-        st.pyplot(fig_amt)
+    fig, ax = plt.subplots()
 
-    st.markdown("---")
+    ax.bar(
+        ["Legit", "Fraud"],
+        [n_legit, n_fraud],
+        color=["green", "red"]
+    )
 
-    # Feature statistics
+    st.pyplot(fig)
+
     st.subheader("Feature Statistics")
-    st.dataframe(df.describe().T.style.format("{:.2f}"), use_container_width=True)
 
-    # Missing values
-    missing = df.isnull().sum()
-    missing = missing[missing > 0]
-    if len(missing) > 0:
-        st.subheader("Missing Values")
-        st.bar_chart(missing)
-    else:
-        st.success("✅ No missing values after cleaning.")
+    st.dataframe(df.describe())
 
-    # Hour distribution
-    st.subheader("Transactions by Hour of Day")
-    fig_hour, ax_hour = plt.subplots(figsize=(8, 3.5))
-    legit_hours = df[df["Class"] == 0]["Hour"].value_counts().sort_index()
-    fraud_hours = df[df["Class"] == 1]["Hour"].value_counts().sort_index()
-    ax_hour.bar(legit_hours.index - 0.2, legit_hours.values, width=0.4,
-                label="Legit", color="#2ecc71", alpha=0.8)
-    ax_hour.bar(fraud_hours.index + 0.2, fraud_hours.values, width=0.4,
-                label="Fraud", color="#e74c3c", alpha=0.8)
-    ax_hour.set_xlabel("Hour of Day")
-    ax_hour.set_ylabel("Count")
-    ax_hour.legend()
-    fig_hour.tight_layout()
-    st.pyplot(fig_hour)
 
-# ═══════════════════════════════════════════════════════════════════════
-#  TAB 2 — MODEL RESULTS
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================
+# TAB 2 — MODEL RESULTS
+# =======================================================
 
 with tab2:
-    st.header("🏆 Model Comparison & Evaluation")
 
-    with st.spinner("Training models (cached after first run) …"):
-        res = run_training_pipeline()
+    st.header("Model Comparison")
 
-    # --- Comparison table ---
-    st.subheader("Metrics Comparison")
-    styled_df = (
-        res["comparison_df"]
-        .style
-        .highlight_max(subset=["Precision", "Recall", "F1-Score", "ROC-AUC", "PR-AUC"],
-                       color="#d4edda")
-        .format("{:.4f}", subset=["Accuracy", "Precision", "Recall", "F1-Score",
-                                   "ROC-AUC", "PR-AUC"])
-    )
-    st.dataframe(styled_df, use_container_width=True)
+    with st.spinner("Training models..."):
 
-    best_name = res["comparison_df"].iloc[0]["Model"]
-    st.success(f"🥇 **Best model (by PR-AUC): {best_name}**")
+        results = run_training_pipeline()
 
-    st.markdown("---")
+    st.dataframe(results["comparison_df"])
 
-    # --- Curves ---
-    col_roc, col_pr = st.columns(2)
-    with col_roc:
-        st.subheader("ROC Curves")
-        fig_roc = plot_roc_curves(res["all_metrics"], res["y_test"])
-        st.pyplot(fig_roc)
+    best_model = results["comparison_df"].iloc[0]["Model"]
 
-    with col_pr:
-        st.subheader("Precision-Recall Curves")
-        fig_pr = plot_pr_curves(res["all_metrics"], res["y_test"])
-        st.pyplot(fig_pr)
+    st.success(f"Best model: {best_model}")
 
-    st.markdown("---")
+    col1, col2 = st.columns(2)
 
-    # --- Confusion matrices ---
-    st.subheader("Confusion Matrices")
-    cm_cols = st.columns(len(res["all_metrics"]))
-    for col, (name, m) in zip(cm_cols, res["all_metrics"].items()):
-        with col:
-            fig_cm = plot_confusion_matrix(m["confusion_matrix"], title=name)
-            st.pyplot(fig_cm)
+    with col1:
+        st.subheader("ROC Curve")
+        fig = plot_roc_curves(results["all_metrics"], results["y_test"])
+        st.pyplot(fig)
 
-    # --- Training times ---
-    st.markdown("---")
-    st.subheader("Training Times")
-    time_data = pd.DataFrame(
-        list(res["training_times"].items()), columns=["Model", "Seconds"]
-    )
-    st.bar_chart(time_data.set_index("Model"))
+    with col2:
+        st.subheader("PR Curve")
+        fig = plot_pr_curves(results["all_metrics"], results["y_test"])
+        st.pyplot(fig)
 
-# ═══════════════════════════════════════════════════════════════════════
-#  TAB 3 — LIVE PREDICTION
-# ═══════════════════════════════════════════════════════════════════════
+
+# =======================================================
+# TAB 3 — LIVE PREDICTION
+# =======================================================
 
 with tab3:
-    st.header("🔮 Real-Time Fraud Prediction")
-    st.markdown("Enter transaction details below or load a random sample from the test set.")
 
-    # Use the cached training pipeline (avoids pickle deserialization issues)
-    with st.spinner("Loading models (cached after first run) …"):
-        res = run_training_pipeline()
-        best_name = res["comparison_df"].iloc[0]["Model"]
-        best_model = res["trained_models"][best_name]
-        preprocessor = res["preprocessor"]
-        feature_names = res["feature_names"]
+    st.header("Live Fraud Prediction")
 
-    # Random sample loader
-    if st.button("🎲 Load Random Sample"):
-        sample = df.sample(1).iloc[0]
-        for feat in feature_names:
-            st.session_state[f"feat_{feat}"] = float(0.0 if pd.isna(sample[feat]) else sample[feat])
-        if sample["Class"] == 1:
-            st.info("ℹ️ This sample is **actually fraudulent** in the dataset.")
-        else:
-            st.info("ℹ️ This sample is **actually legitimate** in the dataset.")
+    with st.spinner("Loading models..."):
 
-    # Input form
-    with st.form("prediction_form"):
-        cols = st.columns(4)
-        inputs = {}
-        for i, feat in enumerate(feature_names):
-            default = st.session_state.get(f"feat_{feat}", 0.0)
-            with cols[i % 4]:
-                inputs[feat] = st.number_input(
-                    feat, value=default, format="%.4f", key=f"input_{feat}"
-                )
+        results = run_training_pipeline()
 
-        submitted = st.form_submit_button("🔍 Predict", use_container_width=True)
+        best_model_name = results["comparison_df"].iloc[0]["Model"]
 
-    if submitted:
+        model = results["trained_models"][best_model_name]
+
+        preprocessor = results["preprocessor"]
+
+        feature_names = results["feature_names"]
+
+    st.write("Enter transaction features")
+
+    inputs = {}
+
+    for feat in feature_names:
+        inputs[feat] = st.number_input(feat, value=0.0)
+
+    if st.button("Predict Fraud"):
+
         input_df = pd.DataFrame([inputs])
-        X_input = preprocessor.transform(input_df)
-        prediction = best_model.predict(X_input)[0]
-        proba = best_model.predict_proba(X_input)[0]
 
-        st.markdown("---")
-        col_res1, col_res2 = st.columns(2)
-        with col_res1:
-            if prediction == 1:
-                st.error("🚨 **FRAUD DETECTED**")
-            else:
-                st.success("✅ **Transaction appears LEGITIMATE**")
-        with col_res2:
-            st.metric("Fraud Probability", f"{proba[1]:.2%}")
-            st.metric("Legit Probability", f"{proba[0]:.2%}")
+        X = preprocessor.transform(input_df)
 
-        # Probability bar
-        fig_prob, ax_prob = plt.subplots(figsize=(6, 1.2))
-        ax_prob.barh([""], [proba[0]], color="#2ecc71", label="Legit")
-        ax_prob.barh([""], [proba[1]], left=[proba[0]], color="#e74c3c", label="Fraud")
-        ax_prob.set_xlim(0, 1)
-        ax_prob.legend(loc="upper right", fontsize=8)
-        ax_prob.set_title("Prediction Confidence")
-        fig_prob.tight_layout()
-        st.pyplot(fig_prob)
+        pred = model.predict(X)[0]
+
+        proba = model.predict_proba(X)[0]
+
+        if pred == 1:
+            st.error("🚨 Fraud Detected")
+        else:
+            st.success("✅ Legitimate Transaction")
+
+        st.metric("Fraud Probability", f"{proba[1]:.2%}")
